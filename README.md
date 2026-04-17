@@ -48,22 +48,58 @@ Drive folder with that service account email.
 
 ## Deploy
 
+Bootstrap the remote Terraform state bucket first:
+
+```bash
+cd terraform/bootstrap
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply
+```
+
+Then configure the main stack variables and switch to the remote backend:
+
 1. Create `terraform/terraform.tfvars` from `terraform/terraform.tfvars.example`.
 2. Put your Android package name in that file.
-3. Run `terraform apply` once to create the runtime service account.
-4. Share your Google Drive folder with that service account email.
-5. Fill in `drive_folder_id`.
-6. Run `terraform apply` again to deploy the upload function.
+3. Run `terraform init -reconfigure` in `terraform/`.
+4. Run `terraform apply` once to create the runtime service account.
+5. Share your Google Drive folder with that service account email.
+6. Fill in `drive_folder_id`.
+7. Run `terraform apply` again to deploy the upload function.
 Commands:
 
 ```bash
 cd terraform
-terraform init
+terraform init -reconfigure
 terraform apply
 ```
 
 Terraform outputs the runtime service account email immediately. The function URL
 becomes available after `drive_folder_id` is set and the second apply completes.
+
+## GitHub Actions Terraform deploy
+
+- The repo includes `.github/workflows/terraform.yml`.
+- It reuses the same GitHub OIDC Workload Identity Federation provider and deployer
+  service account already used by the Android app repo:
+  - provider `projects/1086833593805/locations/global/workloadIdentityPools/github/providers/my-repo`
+  - service account `github-releaser@opportune-chess-492418-r5.iam.gserviceaccount.com`
+- Terraform grants `dreef3/zvaka-backend` impersonation on that service account.
+- PRs run `fmt`, `init`, `validate`, and `plan`.
+- Pushes to `main` run `apply` using the saved plan.
+
+Required GitHub repository secrets:
+
+- `GCP_BILLING_ACCOUNT_ID`
+- `DRIVE_FOLDER_ID`
+- `DEBUG_UPLOAD_TOKEN` (optional)
+- `DRIVE_OAUTH_CLIENT_ID` (optional)
+- `DRIVE_OAUTH_CLIENT_SECRET` (optional)
+- `DRIVE_OAUTH_REFRESH_TOKEN` (optional)
+
+Optional GitHub repository variable:
+
+- `ANDROID_PACKAGE_NAME`
 
 ## Cost controls
 

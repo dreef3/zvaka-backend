@@ -54,3 +54,28 @@ variable "monthly_budget_amount" {
   type    = number
   default = 1
 }
+
+variable "github_repository" {
+  type    = string
+  default = "dreef3/zvaka-backend"
+}
+
+variable "github_wif_project_number" {
+  type    = string
+  default = "1086833593805"
+}
+
+variable "github_wif_pool_id" {
+  type    = string
+  default = "github"
+}
+
+variable "github_wif_provider_id" {
+  type    = string
+  default = "my-repo"
+}
+
+variable "github_deployer_service_account_email" {
+  type    = string
+  default = "github-releaser@opportune-chess-492418-r5.iam.gserviceaccount.com"
+}

@@ -21,3 +21,11 @@ output "upload_api_deployed" {
 output "budget_display_name" {
   value = google_billing_budget.project_budget.display_name
 }
+
+output "github_actions_workload_identity_provider" {
+  value = "projects/${var.github_wif_project_number}/locations/global/workloadIdentityPools/${var.github_wif_pool_id}/providers/${var.github_wif_provider_id}"
+}
+
+output "github_actions_service_account_email" {
+  value = var.github_deployer_service_account_email
+}

@@ -1,6 +1,11 @@
 terraform {
   required_version = ">= 1.7.0"
 
+  backend "gcs" {
+    bucket = "opportune-chess-492418-r5-tfstate"
+    prefix = "zvaka-backend/prod"
+  }
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -16,4 +21,3 @@ terraform {
     }
   }
 }
-

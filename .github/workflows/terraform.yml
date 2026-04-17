@@ -1,0 +1,111 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+  TF_VAR_project_id: opportune-chess-492418-r5
+  TF_VAR_github_repository: dreef3/zvaka-backend
+  TF_VAR_github_wif_project_number: "1086833593805"
+  TF_VAR_github_wif_pool_id: github
+  TF_VAR_github_wif_provider_id: my-repo
+  TF_VAR_github_deployer_service_account_email: github-releaser@opportune-chess-492418-r5.iam.gserviceaccount.com
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          create_credentials_file: true
+          workload_identity_provider: projects/1086833593805/locations/global/workloadIdentityPools/github/providers/my-repo
+          service_account: github-releaser@opportune-chess-492418-r5.iam.gserviceaccount.com
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        env:
+          TF_VAR_billing_account_id: ${{ secrets.GCP_BILLING_ACCOUNT_ID }}
+          TF_VAR_android_package_name: ${{ vars.ANDROID_PACKAGE_NAME || 'com.dreef3.weightlossapp' }}
+          TF_VAR_drive_folder_id: ${{ secrets.DRIVE_FOLDER_ID }}
+          TF_VAR_debug_upload_token: ${{ secrets.DEBUG_UPLOAD_TOKEN }}
+          TF_VAR_drive_oauth_client_id: ${{ secrets.DRIVE_OAUTH_CLIENT_ID }}
+          TF_VAR_drive_oauth_client_secret: ${{ secrets.DRIVE_OAUTH_CLIENT_SECRET }}
+          TF_VAR_drive_oauth_refresh_token: ${{ secrets.DRIVE_OAUTH_REFRESH_TOKEN }}
+        run: terraform plan -no-color -out=tfplan | tee tfplan.txt
+
+      - name: Upload Terraform plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            terraform/tfplan
+            terraform/tfplan.txt
+          if-no-files-found: error
+
+      - name: Comment Terraform plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const plan = fs.readFileSync('terraform/tfplan.txt', 'utf8')
+            const body = [
+              '## Terraform Plan',
+              '```',
+              plan || 'Plan output not captured by the runner.',
+              '```',
+            ].join('\n')
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            })
+
+      - name: Terraform apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TF_VAR_billing_account_id: ${{ secrets.GCP_BILLING_ACCOUNT_ID }}
+          TF_VAR_android_package_name: ${{ vars.ANDROID_PACKAGE_NAME || 'com.dreef3.weightlossapp' }}
+          TF_VAR_drive_folder_id: ${{ secrets.DRIVE_FOLDER_ID }}
+          TF_VAR_debug_upload_token: ${{ secrets.DEBUG_UPLOAD_TOKEN }}
+          TF_VAR_drive_oauth_client_id: ${{ secrets.DRIVE_OAUTH_CLIENT_ID }}
+          TF_VAR_drive_oauth_client_secret: ${{ secrets.DRIVE_OAUTH_CLIENT_SECRET }}
+          TF_VAR_drive_oauth_refresh_token: ${{ secrets.DRIVE_OAUTH_REFRESH_TOKEN }}
+        run: terraform apply -auto-approve tfplan
