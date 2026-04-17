@@ -67,7 +67,7 @@ jobs:
           TF_VAR_drive_oauth_client_id: ${{ secrets.DRIVE_OAUTH_CLIENT_ID }}
           TF_VAR_drive_oauth_client_secret: ${{ secrets.DRIVE_OAUTH_CLIENT_SECRET }}
           TF_VAR_drive_oauth_refresh_token: ${{ secrets.DRIVE_OAUTH_REFRESH_TOKEN }}
-        run: terraform plan -no-color -out=tfplan | tee tfplan.txt
+        run: set -o pipefail && terraform plan -no-color -out=tfplan | tee tfplan.txt
 
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v4

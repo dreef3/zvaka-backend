@@ -39,6 +39,14 @@ resource "google_service_account" "runtime" {
   display_name = "Calorie Drive Upload runtime"
 }
 
+resource "google_project_iam_member" "github_deployer_project_roles" {
+  for_each = toset(var.github_deployer_project_roles)
+
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${var.github_deployer_service_account_email}"
+}
+
 resource "google_service_account_iam_member" "github_deployer_wif_user" {
   service_account_id = "projects/${var.project_id}/serviceAccounts/${var.github_deployer_service_account_email}"
   role               = "roles/iam.workloadIdentityUser"
@@ -260,34 +268,6 @@ resource "google_cloudfunctions2_function" "upload_api" {
   }
 
   depends_on = [google_project_service.services]
-}
-
-resource "google_billing_budget" "project_budget" {
-  billing_account = var.billing_account_id
-  display_name    = "${var.function_name}-monthly-budget"
-
-  budget_filter {
-    projects = ["projects/${data.google_project.current.number}"]
-  }
-
-  amount {
-    specified_amount {
-      currency_code = "EUR"
-      units         = tostring(var.monthly_budget_amount)
-    }
-  }
-
-  threshold_rules {
-    threshold_percent = 0.5
-  }
-
-  threshold_rules {
-    threshold_percent = 0.9
-  }
-
-  threshold_rules {
-    threshold_percent = 1.0
-  }
 }
 
 resource "google_cloudfunctions2_function_iam_member" "public_invoker" {

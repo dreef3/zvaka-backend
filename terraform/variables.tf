@@ -79,3 +79,19 @@ variable "github_deployer_service_account_email" {
   type    = string
   default = "github-releaser@opportune-chess-492418-r5.iam.gserviceaccount.com"
 }
+
+variable "github_deployer_project_roles" {
+  type = list(string)
+  default = [
+    "roles/viewer",
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/serviceusage.serviceUsageAdmin",
+    "roles/secretmanager.admin",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.serviceAccountUser",
+    "roles/storage.admin",
+    "roles/cloudfunctions.admin",
+    "roles/run.admin",
+    "roles/artifactregistry.admin",
+  ]
+}
