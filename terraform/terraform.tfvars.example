@@ -1,0 +1,6 @@
+project_id          = "your-gcp-project-id"
+region              = "us-central1"
+function_name       = "calorie-drive-upload"
+drive_folder_id     = "your-google-drive-folder-id"
+android_package_name = "com.dreef3.weightlossapp"
+debug_upload_token  = ""
