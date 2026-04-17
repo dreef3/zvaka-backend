@@ -39,13 +39,13 @@ resource "google_service_account" "runtime" {
 }
 
 resource "google_service_account_iam_member" "github_deployer_wif_user" {
-  service_account_id = var.github_deployer_service_account_email
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${var.github_deployer_service_account_email}"
   role               = "roles/iam.workloadIdentityUser"
   member             = local.github_principal_set
 }
 
 resource "google_service_account_iam_member" "github_deployer_token_creator" {
-  service_account_id = var.github_deployer_service_account_email
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${var.github_deployer_service_account_email}"
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = local.github_principal_set
 }
