@@ -82,8 +82,8 @@ becomes available after `drive_folder_id` is set and the second apply completes.
 - The repo includes `.github/workflows/terraform.yml`.
 - It reuses the same GitHub OIDC Workload Identity Federation provider and deployer
   service account already used by the Android app repo:
-  - provider `projects/1086833593805/locations/global/workloadIdentityPools/github/providers/my-repo`
-  - service account `github-releaser@opportune-chess-492418-r5.iam.gserviceaccount.com`
+  - provider: an existing GitHub OIDC Workload Identity Federation provider in your GCP project
+  - service account: an existing deployer service account in your GCP project
 - Terraform grants `dreef3/zvaka-backend` impersonation on that service account.
 - PRs run `fmt`, `init`, `validate`, and `plan`.
 - Pushes to `main` run `apply` using the saved plan.
