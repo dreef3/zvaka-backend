@@ -8,9 +8,10 @@ data "google_project" "current" {
 }
 
 locals {
-  source_dir           = "${path.module}/../function-source"
-  has_drive_folder_id  = trimspace(var.drive_folder_id) != ""
-  github_principal_set = "principalSet://iam.googleapis.com/projects/${var.github_wif_project_number}/locations/global/workloadIdentityPools/${var.github_wif_pool_id}/attribute.repository/${var.github_repository}"
+  source_dir                = "${path.module}/../function-source"
+  has_drive_folder_id       = trimspace(var.drive_folder_id) != ""
+  github_principal_set      = "principalSet://iam.googleapis.com/projects/${var.github_wif_project_number}/locations/global/workloadIdentityPools/${var.github_wif_pool_id}/attribute.repository/${var.github_repository}"
+  github_pool_principal_set = "principalSet://iam.googleapis.com/projects/${var.github_wif_project_number}/locations/global/workloadIdentityPools/${var.github_wif_pool_id}/*"
 }
 
 resource "random_id" "suffix" {
@@ -41,13 +42,13 @@ resource "google_service_account" "runtime" {
 resource "google_service_account_iam_member" "github_deployer_wif_user" {
   service_account_id = "projects/${var.project_id}/serviceAccounts/${var.github_deployer_service_account_email}"
   role               = "roles/iam.workloadIdentityUser"
-  member             = local.github_principal_set
+  member             = local.github_pool_principal_set
 }
 
 resource "google_service_account_iam_member" "github_deployer_token_creator" {
   service_account_id = "projects/${var.project_id}/serviceAccounts/${var.github_deployer_service_account_email}"
   role               = "roles/iam.serviceAccountTokenCreator"
-  member             = local.github_principal_set
+  member             = local.github_pool_principal_set
 }
 
 resource "google_storage_bucket" "source" {
