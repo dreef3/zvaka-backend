@@ -44,6 +44,15 @@ exports.uploadExample = async (req, res) => {
     const entryId = (parsed.fields.entry_id || '').trim();
     const confidenceState = (parsed.fields.confidence_state || '').trim();
 
+    console.info('uploadExample received request', {
+      hasPhoto: Boolean(upload),
+      hasIntegrityToken: Boolean(integrityToken),
+      hasDebugAuthToken: Boolean(debugAuthToken),
+      entryId: entryId || null,
+      descriptionLength: description.length,
+      confidenceState: confidenceState || null,
+    });
+
     if (!upload) {
       res.status(400).json({ error: 'missing_photo' });
       return;
@@ -74,10 +83,22 @@ exports.uploadExample = async (req, res) => {
         res.status(401).json({ error: 'missing_integrity_token' });
         return;
       }
-      await verifyIntegrityToken({
+      const integritySummary = await verifyIntegrityToken({
         integrityToken,
         allowedPackageName,
         expectedRequestHash: requestHash,
+      });
+      console.info('uploadExample verified Play Integrity', {
+        entryId: entryId || null,
+        packageName: integritySummary.packageName,
+        appRecognitionVerdict: integritySummary.appRecognitionVerdict,
+        appLicensingVerdict: integritySummary.appLicensingVerdict,
+        deviceRecognitionVerdict: integritySummary.deviceRecognitionVerdict,
+        tokenAgeMs: integritySummary.tokenAgeMs,
+      });
+    } else {
+      console.info('uploadExample authenticated with debug token', {
+        entryId: entryId || null,
       });
     }
 
@@ -140,6 +161,16 @@ exports.uploadExample = async (req, res) => {
       record_id: recordId,
       photo_file_id: photoFile.data.id,
       metadata_file_id: metadataFile.data.id,
+    });
+    console.info('uploadExample stored upload', {
+      recordId,
+      entryId: entryId || null,
+      authMode: isDebugAuthenticated ? 'debug_token' : 'play_integrity',
+      photoFileId: photoFile.data.id,
+      metadataFileId: metadataFile.data.id,
+      photoMimeType: upload.mimeType || 'image/jpeg',
+      calorieEstimate,
+      confidenceState: confidenceState || null,
     });
   } catch (error) {
     console.error('uploadExample failed', error);
@@ -266,6 +297,14 @@ async function verifyIntegrityToken({
   if (!Number.isFinite(timestampMillis) || ageMs > MAX_TOKEN_AGE_MS) {
     throw withStatus(new Error('integrity_token_expired'), 401);
   }
+
+   return {
+    packageName: requestDetails.requestPackageName,
+    appRecognitionVerdict: appIntegrity.appRecognitionVerdict,
+    appLicensingVerdict,
+    deviceRecognitionVerdict,
+    tokenAgeMs: ageMs,
+  };
 }
 
 function createDriveAuth() {
