@@ -2,18 +2,17 @@
 
 const Busboy = require('busboy');
 const crypto = require('crypto');
+const admin = require('firebase-admin');
 const { Readable } = require('stream');
 const { google } = require('googleapis');
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const PLAY_INTEGRITY_SCOPE = 'https://www.googleapis.com/auth/playintegrity';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png']);
-const MAX_TOKEN_AGE_MS = 5 * 60 * 1000;
-const ACCEPTED_DEVICE_VERDICTS = new Set([
-  'MEETS_STRONG_INTEGRITY',
-  'MEETS_DEVICE_INTEGRITY',
-]);
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 exports.uploadExample = async (req, res) => {
   try {
@@ -23,20 +22,15 @@ exports.uploadExample = async (req, res) => {
     }
 
     const driveFolderId = (process.env.DRIVE_FOLDER_ID || '').trim();
-    const allowedPackageName = (process.env.ALLOWED_PACKAGE_NAME || '').trim();
     const debugUploadToken = (process.env.DEBUG_UPLOAD_TOKEN || '').trim();
     if (!driveFolderId) {
       res.status(500).json({ error: 'missing_drive_folder_id' });
       return;
     }
-    if (!allowedPackageName) {
-      res.status(500).json({ error: 'missing_allowed_package_name' });
-      return;
-    }
 
     const parsed = await parseMultipartForm(req);
     const upload = parsed.files.photo;
-    const integrityToken = parsed.fields.integrity_token;
+    const appCheckToken = parsed.fields.integrity_token;
     const debugAuthToken = parsed.fields.debug_auth_token;
     const description = (parsed.fields.description || '').trim();
     const caloriesRaw = (parsed.fields.calorie_estimate || '').trim();
@@ -44,6 +38,14 @@ exports.uploadExample = async (req, res) => {
     const entryId = (parsed.fields.entry_id || '').trim();
     const confidenceState = (parsed.fields.confidence_state || '').trim();
 
+    console.info('uploadExample received request', {
+      hasPhoto: Boolean(upload),
+      hasAppCheckToken: Boolean(appCheckToken),
+      hasDebugAuthToken: Boolean(debugAuthToken),
+      entryId: entryId || null,
+      descriptionLength: description.length,
+      confidenceState: confidenceState || null,
+    });
     if (!upload) {
       res.status(400).json({ error: 'missing_photo' });
       return;
@@ -59,25 +61,22 @@ exports.uploadExample = async (req, res) => {
       return;
     }
 
-    const requestHash = computeRequestHash({
-      photoBytes: upload.buffer,
-      description,
-      calorieEstimate,
-      capturedAt,
-      entryId,
-      confidenceState,
-    });
-
     const isDebugAuthenticated = debugUploadToken && debugAuthToken === debugUploadToken;
     if (!isDebugAuthenticated) {
-      if (!integrityToken) {
-        res.status(401).json({ error: 'missing_integrity_token' });
+      if (!appCheckToken) {
+        res.status(401).json({ error: 'missing_app_check_token' });
         return;
       }
-      await verifyIntegrityToken({
-        integrityToken,
-        allowedPackageName,
-        expectedRequestHash: requestHash,
+      const appCheckSummary = await verifyAppCheckToken({
+        appCheckToken,
+      });
+      console.info('uploadExample verified Firebase App Check', {
+        entryId: entryId || null,
+        appId: appCheckSummary.appId,
+      });
+    } else {
+      console.info('uploadExample authenticated with debug token', {
+        entryId: entryId || null,
       });
     }
 
@@ -109,7 +108,7 @@ exports.uploadExample = async (req, res) => {
     const metadataPayload = {
       record_id: recordId,
       created_at: new Date().toISOString(),
-      auth_mode: isDebugAuthenticated ? 'debug_token' : 'play_integrity',
+      auth_mode: isDebugAuthenticated ? 'debug_token' : 'firebase_app_check',
       captured_at: capturedAt || null,
       description,
       calorie_estimate: calorieEstimate,
@@ -140,6 +139,16 @@ exports.uploadExample = async (req, res) => {
       record_id: recordId,
       photo_file_id: photoFile.data.id,
       metadata_file_id: metadataFile.data.id,
+    });
+    console.info('uploadExample stored upload', {
+      recordId,
+      entryId: entryId || null,
+      authMode: isDebugAuthenticated ? 'debug_token' : 'firebase_app_check',
+      photoFileId: photoFile.data.id,
+      metadataFileId: metadataFile.data.id,
+      photoMimeType: upload.mimeType || 'image/jpeg',
+      calorieEstimate,
+      confidenceState: confidenceState || null,
     });
   } catch (error) {
     console.error('uploadExample failed', error);
@@ -223,48 +232,15 @@ function parseMultipartForm(req) {
   });
 }
 
-async function verifyIntegrityToken({
-  integrityToken,
-  allowedPackageName,
-  expectedRequestHash,
-}) {
-  const auth = new google.auth.GoogleAuth({
-    scopes: [PLAY_INTEGRITY_SCOPE],
-  });
-  const authClient = await auth.getClient();
-  const response = await authClient.request({
-    url: `https://playintegrity.googleapis.com/v1/${encodeURIComponent(allowedPackageName)}:decodeIntegrityToken`,
-    method: 'POST',
-    data: {
-      integrityToken,
-    },
-  });
-
-  const verdict = response.data?.tokenPayloadExternal;
-  const requestDetails = verdict?.requestDetails || {};
-  const appIntegrity = verdict?.appIntegrity || {};
-  const deviceRecognitionVerdict = verdict?.deviceIntegrity?.deviceRecognitionVerdict || [];
-  const appLicensingVerdict = verdict?.accountDetails?.appLicensingVerdict;
-  const timestampMillis = Number.parseInt(requestDetails.timestampMillis || '0', 10);
-  const ageMs = Math.abs(Date.now() - timestampMillis);
-
-  if (requestDetails.requestPackageName !== allowedPackageName) {
-    throw withStatus(new Error('integrity_package_mismatch'), 401);
-  }
-  if (requestDetails.requestHash !== expectedRequestHash) {
-    throw withStatus(new Error('integrity_request_hash_mismatch'), 401);
-  }
-  if (appIntegrity.appRecognitionVerdict !== 'PLAY_RECOGNIZED') {
-    throw withStatus(new Error('integrity_app_not_play_recognized'), 401);
-  }
-  if (appLicensingVerdict !== 'LICENSED') {
-    throw withStatus(new Error('integrity_app_not_licensed'), 401);
-  }
-  if (!deviceRecognitionVerdict.some((value) => ACCEPTED_DEVICE_VERDICTS.has(value))) {
-    throw withStatus(new Error('integrity_device_not_recognized'), 401);
-  }
-  if (!Number.isFinite(timestampMillis) || ageMs > MAX_TOKEN_AGE_MS) {
-    throw withStatus(new Error('integrity_token_expired'), 401);
+async function verifyAppCheckToken({ appCheckToken }) {
+  try {
+    const claims = await admin.appCheck().verifyToken(appCheckToken);
+    return {
+      appId: claims.appId,
+    };
+  } catch (error) {
+    console.error('App Check verification failed', error);
+    throw withStatus(new Error('invalid_app_check_token'), 401);
   }
 }
 
@@ -281,30 +257,6 @@ function createDriveAuth() {
   return new google.auth.GoogleAuth({
     scopes: [DRIVE_SCOPE],
   });
-}
-
-function computeRequestHash({
-  photoBytes,
-  description,
-  calorieEstimate,
-  capturedAt,
-  entryId,
-  confidenceState,
-}) {
-  const digest = crypto.createHash('sha256');
-  digest.update(photoBytes);
-  digest.update(Buffer.from([0]));
-  [
-    description,
-    String(calorieEstimate),
-    capturedAt,
-    entryId,
-    confidenceState,
-  ].forEach((value) => {
-    digest.update(Buffer.from(value, 'utf8'));
-    digest.update(Buffer.from([0]));
-  });
-  return digest.digest('base64');
 }
 
 function formatTimestamp(value) {
