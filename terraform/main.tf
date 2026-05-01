@@ -217,6 +217,7 @@ resource "google_cloudfunctions2_function" "upload_api" {
 
     environment_variables = {
       ALLOWED_PACKAGE_NAME = var.android_package_name
+      FIREBASE_PROJECT_ID  = var.firebase_project_id
     }
 
     secret_environment_variables {
