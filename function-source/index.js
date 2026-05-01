@@ -9,9 +9,10 @@ const { google } = require('googleapis');
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png']);
+const FIREBASE_PROJECT_ID = (process.env.FIREBASE_PROJECT_ID || '').trim();
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp(FIREBASE_PROJECT_ID ? { projectId: FIREBASE_PROJECT_ID } : undefined);
 }
 
 exports.uploadExample = async (req, res) => {

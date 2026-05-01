@@ -22,6 +22,7 @@ env:
   TF_IN_AUTOMATION: true
   TF_INPUT: false
   TF_VAR_project_id: opportune-chess-492418-r5
+  TF_VAR_firebase_project_id: zvaka-e2a77
   TF_VAR_github_repository: dreef3/zvaka-backend
   TF_VAR_github_wif_project_number: "1086833593805"
   TF_VAR_github_wif_pool_id: github

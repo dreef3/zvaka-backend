@@ -26,6 +26,10 @@ variable "android_package_name" {
   type = string
 }
 
+variable "firebase_project_id" {
+  type = string
+}
+
 variable "debug_upload_token" {
   type      = string
   sensitive = true
